@@ -59,7 +59,7 @@ if uploaded_file is not None:
         for _, row in filtered_df.iterrows():
             options = [row[f"option{i}"] for i in range(1, 6) if pd.notna(row[f"option{i}"])]
             answers = [row[f"answer{i}"] for i in range(1, 6) if pd.notna(row[f"answer{i}"])]
-
+            
             # シャッフルされた選択肢をセッション状態に保存
             if 'shuffled_options' not in st.session_state:
                 st.session_state.shuffled_options = {}
@@ -75,9 +75,6 @@ if uploaded_file is not None:
                 "answers": answers
             }
             quizzes.append(quiz)
-
-        # ユーザーの回答を保存するための辞書
-        user_answers = st.session_state.user_answers
 
         # クイズの表示とユーザー回答の収集
         for idx, quiz in enumerate(quizzes, start=1):
@@ -103,31 +100,18 @@ if uploaded_file is not None:
                 unsafe_allow_html=True
             )
 
+            # 単一選択問題の処理
             if quiz["type"] == "single":
-                # 単一選択問題
-                if quiz["question"] not in user_answers:
-                    user_answers[quiz["question"]] = st.radio(
-                        "",  # ラベルなし
-                        quiz["options"],
-                        key=f"{idx}_radio",
-                        index=None  # 初期状態で何も選択されていない
-                    )
-                else:
-                    answer = user_answers.get(quiz["question"])
-                    # ユーザーが選択した回答がオプションリストに存在する場合にインデックスを取得
-                    index = quiz["options"].index(answer) if answer in quiz["options"] else None
-                    st.radio(
-                        "",  # ラベルなし
-                        quiz["options"],
-                        key=f"{idx}_radio",
-                        index=index
-                    )
-            elif quiz["type"] == "multiple":
-                # 複数選択問題
-                selected_options = user_answers.get(quiz["question"], [])
-                if selected_options is None:
-                    selected_options = []
+                user_selection = st.radio(
+                    "",  # ラベルなし
+                    quiz["options"],
+                    key=f"{idx}_radio"
+                )
+                st.session_state.user_answers[quiz["question"]] = user_selection  # 選択された答えをセッションに保存
 
+            # 複数選択問題の処理
+            elif quiz["type"] == "multiple":
+                selected_options = st.session_state.user_answers.get(quiz["question"], [])
                 for option in quiz["options"]:
                     checked = option in selected_options
                     if st.checkbox(option, key=f"{idx}_{option}", value=checked):
@@ -136,7 +120,7 @@ if uploaded_file is not None:
                     else:
                         if option in selected_options:
                             selected_options.remove(option)
-                user_answers[quiz["question"]] = selected_options
+                st.session_state.user_answers[quiz["question"]] = selected_options
 
             # 問題間のスペース
             st.markdown("<br>", unsafe_allow_html=True)
@@ -147,7 +131,7 @@ if uploaded_file is not None:
             total_questions = len(quizzes)
             for idx, quiz in enumerate(quizzes, start=1):
                 if quiz["type"] == "single":
-                    user_answer = user_answers.get(quiz["question"])
+                    user_answer = st.session_state.user_answers.get(quiz["question"])
                     is_correct = user_answer == quiz["answers"][0]
                     if is_correct:
                         correct_count += 1
@@ -155,7 +139,7 @@ if uploaded_file is not None:
                     else:
                         st.session_state.highlighted_questions.add(idx)
                 elif quiz["type"] == "multiple":
-                    user_answers_options = set(user_answers.get(quiz["question"], []))
+                    user_answers_options = set(st.session_state.user_answers.get(quiz["question"], []))
                     correct_answers = set(quiz["answers"])
                     is_correct = user_answers_options == correct_answers
                     if is_correct:
@@ -164,5 +148,8 @@ if uploaded_file is not None:
                     else:
                         st.session_state.highlighted_questions.add(idx)
 
-            # 結果の表示
-            st.write(f"正答数: {correct_count}/{total_questions}")
+            st.session_state.score = correct_count
+            st.session_state.total_questions = total_questions
+            st.session_state.percentage = (correct_count / total_questions) * 100
+            st.write(f'正解数: {correct_count}/{total_questions}')
+            st.write(f'正答率: {st.session_state.percentage:.2f}%')
